@@ -14,7 +14,8 @@ class SetupManager:
         """
         Creates an instance of SetupManager.
 
-        :param:
+        :param block_device: a string representing a micro-sd card to configure
+        :param defconfig: the defconfig file used to compile the kernel
         :return: None
         """
         self.logger = logging.getLogger("config_tool")
@@ -30,10 +31,17 @@ class SetupManager:
         self.repositories_status = False
         self.device_mounts_status = False
 
-        # class variables representing required files for kernel build/micro-sd card config
+        # class variables representing required files, directories, and repos necessary for kernel build/micro-sd card config
         self.config_files = {self.defconfig, "boot.scr", "expansion-board-overlay.dtbo"}
         self.packages = ["swig", "python3-dev", "build-essential", "device-tree-compiler", "git", "bison", "flex",
-                         "python3-setuptool", "libssl-dev", "dosfstools", "libncurses-dev", "bc"]
+                         "python3-setuptools", "libssl-dev", "dosfstools", "libncurses-dev", "bc"]
+        self.repositories = {
+            "linux": "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git", 
+            "u-boot": "git://git.denx.de/u-boot.git",
+            "arm-trusted-firmware": "https://github.com/ARM-software/arm-trusted-firmware.git",
+            "linux-firmware": "git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git",
+        }
+        # Finished Init
         self.logger.info("SetupManager instantiated.")
         
     def _create_build_directory(self):
@@ -48,6 +56,7 @@ class SetupManager:
             return True
         except FileExistsError:
             self.logger.info("Build directory already exists. Please rename or run tool with --clean flag")
+            return False
         except Exception as e:
             self.logger.info("Error encountered while making build directory.")
             self.logger.error(e)
@@ -104,9 +113,11 @@ class SetupManager:
         # Get contents of sys/class/block
         temp_iterator = pathlib.Path("/sys/class/block").iterdir()
         block_devices = [devices.name for devices in temp_iterator]
-
+        device_name = self.block_device.split('/')[-1]
+        self.logger.debug(device_name)
+        self.logger.debug(f"block devices: {block_devices}")
         # Confirm that user's block device present in list
-        if self.block_device in block_devices:
+        if device_name in block_devices:
             self.logger.info(f"User device {self.block_device} detected in system block devices.")
             return True
         else:
@@ -142,10 +153,12 @@ class SetupManager:
         for package in self.packages:
             try:
                 subprocess.run(["dpkg", "-s", package], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.logger.info(f"Dependency found: {package}. Moving on...")
             except subprocess.CalledProcessError:
                 self.logger.info(f"Unable to detect {package} in system. Attempting installation...")
                 if self._install_system_dependency(package) is False:
-                    return False 
+                    return False
+        return True
 
     def _install_system_dependency(self, package):
         """
@@ -165,28 +178,74 @@ class SetupManager:
  
     def _download_build_repositories(self, repository):
         """
-        Clone necessary repositories into "
-        "
+        Clone repository into /repositories directory. 
         """
+        destination = pathlib.Path(f"repositories/{repository}")
+        try:
+            if repository == "linux":
+                subprocess.run(["git", "clone", self.repositories[repository], "--depth=1", str(destination)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                subprocess.run(["git", "clone", self.repositories[repository], str(destination)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.logger.info(f"Successfully cloned {repository}")
+            return True
+        except subprocess.CalledProcessError as e:
+            self.logger.info(f"Unable to clone {repository}.")
+            self.logger.error(e.stderr.decode())
+            return False
  
     def _check_repositories_exist(self):
-        pass
+        """
+        Check that /repositories directory exists and contains necessary repos - create them if not.
+        
+        :return: True if directories present or created successfully, else False
+        """
+        repos_contents = list()
+
+        if pathlib.Path("repositories").is_dir():
+            # repository dir exists so we can check its contents
+            self.logger.info("Repositories directory found. Checking contents...")
+            temp_iterator = pathlib.Path("repositories").iterdir()
+            repos_contents = [obj_name.name for obj_name in temp_iterator]
+        
+        else:
+            try:
+                pathlib.Path.mkdir("repositories")
+                self.logger.info("Created respositories directory.")
+            except Exception as e:
+                self.logger.info("Unable to create repositories directory.")
+                self.logger.error(e)
+        
+        # Confirm that 
+        for item in self.repositories.keys():
+            if item not in repos_contents:
+                self.logger.info(f"Cloning {item}...")
+                if self._download_build_repositories(item) is False:
+                    return False
+        return True
 
     def run_setup_manager(self):
         self.internet_connection = self._check_internet_connection()
         self.config_files_status = self._check_config_files_exist()
         self.block_device_status = self._check_block_device_exists()
+        self.device_mounts_status = self._check_system_mounts()
         self.system_dependencies_status = self._check_system_dependencies()
         self.repositories_status = self._check_repositories_exist()
-        self.device_mounts_status = self._check_system_mounts()
         self.build_directory_status = self._create_build_directory()
-         
+        self.logger.debug(self.internet_connection)
+        self.logger.debug(self.build_directory_status)
+        self.logger.debug(self.config_files_status)
+        self.logger.debug(self.block_device_status)
+        self.logger.debug(self.system_dependencies_status)
+        self.logger.debug(self.repositories_status)
+        self.logger.debug(self.device_mounts_status)
+        
         if all([self.internet_connection, 
                 self.build_directory_status, 
                 self.config_files_status, 
                 self.block_device_status, 
                 self.system_dependencies_status,
-                self.repositories_status]):
+                self.repositories_status,
+                self.device_mounts_status]):
             return True
         else:
             return False

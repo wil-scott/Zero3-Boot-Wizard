@@ -6,7 +6,7 @@
             "format": "%(levelname)s: %(message)s"
         },
         "detailed": {
-            "format": "[%(levelname)s|%(module)s|L%(lineno)d] %(asctime)s: $(message)s",
+            "format": "[%(levelname)s|%(module)s|L%(lineno)d] %(asctime)s: %(message)s",
             "datefmt": "%Y-%m-%dT%H:%M:%S%z"
         }
     },
@@ -18,7 +18,7 @@
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "formatter": "simple",
+            "formatter": "detailed",
             "filename": "logs/zero3_config.log",
             "maxBytes": 10000000,
             "backupCount": 3

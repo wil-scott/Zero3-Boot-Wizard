@@ -12,7 +12,7 @@ import pathlib
 import shutil
 
 from src.SetupManager import SetupManager
-
+from src.MemoryManager import MemoryManager
 
 def setup_logging():
     """
@@ -72,6 +72,13 @@ def main():
         logger.info("Unable to set up work environment. Please review logs for more information.")
         exit()
     
+    logger.info("SetupManager has completed its tasks!") 
+    # Format micro-sd card
+    memory_helper = MemoryManager(args.blockdevice)
+    if memory_helper.configure_block_device_with_bootloader() is False:
+        logger.info("Unable to configure block device. Please review logs for more information.")
+        exit()
+
     logger.info("Checkpoint reached!")
 
 

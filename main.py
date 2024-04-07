@@ -22,6 +22,14 @@ def setup_logging():
     
     :return: None
     """
+    # Create logs directory if it doesn't exist
+    log_dir = pathlib.Path("logs/")
+    log_file = pathlib.Path("logs/zero3_config.log")
+    if log_dir.exists() is False:
+        pathlib.Path.mkdir(log_dir)
+    if log_file.is_file() is False:
+        pathlib.Path.touch(log_file)
+    
     config_file = pathlib.Path("logging_config/config.json")
     with open(config_file) as file:
         config = json.load(file)
@@ -95,7 +103,7 @@ def main():
         logger.info("Unable to complete u-boot .spl compilation. Please review logs for more information.")
         exit()
 
-    logger.info("Checkpoint reached!")
+    logger.info("MakeManager has finishing compiling u-boot.")
 
     # Format micro-sd card
     block_device_helper = BlockDeviceManager(args.blockdevice)
@@ -103,7 +111,17 @@ def main():
         logger.info("Unable to configure block device. Please review logs for more information.")
         exit()
 
-    logger.info("Checkpoint reached!")
+    logger.info(f"BlockDeviceManager has finished formatting {args.blockdevice}! U-boot is now on {args.blockdevice}.")
+
+    # Make Image, dtb, modules
+    if make_manager.run_linux_make_commands() is False:
+        logger.info("Unable to complete linux make commands. Please review logs for more information.")
+        exit()
+
+    logger.info("MakeManager has finishing compiling Image, DTB, and modules.")
+
+    # Make and configure RootFS
+
 
 
 if __name__ == "__main__":

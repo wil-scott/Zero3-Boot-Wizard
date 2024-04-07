@@ -22,25 +22,20 @@ class SetupManager:
         self.block_device = block_device
         self.defconfig = defconfig or "opz3_defconfig"
 
-        # Status-related class variables
-        self.internet_connection = False
-        self.build_directory_status = False
-        self.config_files_status = False
-        self.block_device_status = False
-        self.system_dependencies_status = False
-        self.repositories_status = False
-        self.device_mounts_status = False
-
         # class variables representing required files, directories, and repos necessary for kernel build/micro-sd card config
         self.config_files = {self.defconfig, "boot.scr", "expansion-board-overlay.dtbo"}
         self.packages = ["swig", "python3-dev", "build-essential", "device-tree-compiler", "git", "bison", "flex",
-                         "python3-setuptools", "libssl-dev", "dosfstools", "libncurses-dev", "bc"]
+                         "python3-setuptools", "libssl-dev", "dosfstools", "libncurses-dev", "bc", "debootstrap"]
         self.repositories = {
             "linux": "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git", 
             "u-boot": "git://git.denx.de/u-boot.git",
             "arm-trusted-firmware": "https://github.com/ARM-software/arm-trusted-firmware.git",
             "linux-firmware": "git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git",
         }
+
+        self.defconfig_destination_path = "repositories/linux/arch/arm64/configs/"
+        self.defconfig_source_path = "kernel_config/opz3_defconfig"
+
         # Finished Init
         self.logger.info("SetupManager instantiated.")
         
@@ -223,30 +218,57 @@ class SetupManager:
                     return False
         return True
 
-    def run_setup_manager(self):
-        self.internet_connection = self._check_internet_connection()
-        self.config_files_status = self._check_config_files_exist()
-        self.block_device_status = self._check_block_device_exists()
-        self.device_mounts_status = self._check_system_mounts()
-        self.system_dependencies_status = self._check_system_dependencies()
-        self.repositories_status = self._check_repositories_exist()
-        self.build_directory_status = self._create_build_directory()
-        self.logger.debug(self.internet_connection)
-        self.logger.debug(self.build_directory_status)
-        self.logger.debug(self.config_files_status)
-        self.logger.debug(self.block_device_status)
-        self.logger.debug(self.system_dependencies_status)
-        self.logger.debug(self.repositories_status)
-        self.logger.debug(self.device_mounts_status)
+    def _copy_defconfig_to_repo(self):
+        """
+        Copy opz3_defconfig into the linux repo's config/ directory.
+
+        :return: True if copy is successful, else False
         
-        if all([self.internet_connection, 
-                self.build_directory_status, 
-                self.config_files_status, 
-                self.block_device_status, 
-                self.system_dependencies_status,
-                self.repositories_status,
-                self.device_mounts_status]):
-            return True
-        else:
+        """
+        command_list = ["sudo", "cp", self.defconfig_source_path, self.defconfig_destination_path]
+        try:
+            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.logger.info(f"Successfully copied {self.defconfig} to linux config directory.")
+        except subprocess.SubprocessError as e:
+            self.logger.info(f"Failed to copy {self.defconfig} to linux config directory.")
+            self.logger.error(e.stderr.decode())
             return False
 
+        return True
+
+    def _check_defconfig_in_repo(self):
+        """
+        Check that the opz3_defconfig file is present in the linux repo's config/ directory.
+
+        :return: True if copy is successful, else False
+        """
+        contents_of_linux_config = [contents.name for contents in pathlib.Path(self.defconfig_destination_path).iterdir()]
+        if self.defconfig in contents_of_linux_config:
+            self.logger.info(f"{self.defconfig} found in linux config directory.")
+            return True
+        else:
+            self.logger.info(f"{self.defconfig} not found in linux config directory.")
+            return self._copy_defconfig_to_repo()
+
+    def run_setup_manager(self):
+        """
+        Iterate through tasks necessary to set-up work environment. Cease operations at first failure.
+
+        :return: True if all tasks complete successfully, else False
+        """
+        task_list = [
+            self._check_internet_connection,
+            self._check_config_files_exist,
+            self._check_block_device_exists,
+            self._check_system_mounts,
+            self._check_system_dependencies,
+            self._check_repositories_exist,
+            self._check_defconfig_in_repo,
+            self._create_build_directory
+        ]
+
+        for task in task_list:
+            if task() is False:
+                return False
+
+        return True

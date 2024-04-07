@@ -12,7 +12,9 @@ import pathlib
 import shutil
 
 from src.SetupManager import SetupManager
-from src.MemoryManager import MemoryManager
+from src.MakeManager import MakeManager
+from src.BlockDeviceManager import BlockDeviceManager
+
 
 def setup_logging():
     """
@@ -32,14 +34,25 @@ def validate_args(args, logger):
     :param args: an argparse object containing the parsed command line arguments.
     :return: True or None/Exit if valid flags present, else argparse.error is raised
     """
-    if args.clean:
+    if args.forceclean:
         try:
             shutil.rmtree(pathlib.Path("build"))
             shutil.rmtree(pathlib.Path("repositories"))
-            logger.info("build and build_repos removed")
+            logger.info("build and repositories removed.")
         except Exception as e:
             logger.info("Error encountered when attempting to clean tool directory.")
             logger.error(e)
+        exit()
+    elif args.clean:
+        try:
+            shutil.rmtree(pathlib.Path("build"))
+            logger.info("build directory removed.")
+        except Exception as e:
+            logger.info("Error encountered when attempting to remove build directory.")
+            logger.error(e)
+        exit()
+    elif args.makeclean:
+        # TODO: add subprocess commands for make-clean/make mrproper
         exit()
     elif args.blockdevice is None:
         logger.info("Missing Block Device argument detected.")
@@ -62,7 +75,9 @@ def main():
     parser = argparse.ArgumentParser(description="Configures a micro-SD card to run mainline Linux kernel on Orange Pi Zero3")
     parser.add_argument("-bd", "--blockdevice", type=str, help="Path to the block device representing the target Micro-SD Card")
     parser.add_argument("-d","--defconfig", default="opz3_defconfig", type=str, help="Name of defconfig file to be used for kernel configuration" )
-    parser.add_argument("-c", "--clean", action="store_true", help="Clean the tool's directory to a pre-configuration state")
+    parser.add_argument("-fc", "--forceclean", action="store_true", help="Remove build and repositories directory")
+    parser.add_argument("-c", "--clean", action="store_true", help="Remove the build directory and its contents")
+    parser.add_argument("-mc", "--makeclean", action="store_true", help="Run 'make clean' in tf-a and u-boot repo. Run mrproper in 'linux' repo")
     args = parser.parse_args()
     validate_args(args, logger)
 
@@ -73,9 +88,18 @@ def main():
         exit()
     
     logger.info("SetupManager has completed its tasks!") 
+    
+    # Make bl31 and u-boot
+    make_manager = MakeManager(args.blockdevice, args.defconfig)
+    if make_manager.run_uboot_make_commands() is False:
+        logger.info("Unable to complete u-boot .spl compilation. Please review logs for more information.")
+        exit()
+
+    logger.info("Checkpoint reached!")
+
     # Format micro-sd card
-    memory_helper = MemoryManager(args.blockdevice)
-    if memory_helper.configure_block_device_with_bootloader() is False:
+    block_device_helper = BlockDeviceManager(args.blockdevice)
+    if block_device_helper.configure_block_device_with_bootloader() is False:
         logger.info("Unable to configure block device. Please review logs for more information.")
         exit()
 

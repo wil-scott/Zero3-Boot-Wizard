@@ -1,5 +1,5 @@
 """
-MemoryManager is responsible for preping the user's block device to store the bootable image. 
+BlockDeviceManager is responsible for preping the user's block device to store the bootable image. 
 @author: Wil Scott
 @date: April 2024
 """
@@ -8,11 +8,11 @@ import pathlib
 import subprocess
 
 
-class MemoryManager:
+class BlockDeviceManager:
 
     def __init__(self, block_device):
         """
-        Creates an instance of MemoryManager.
+        Creates an instance of BlockDeviceManager.
 
         :param block_device: a string representing a micro-sd card to configure
         :return: None
@@ -23,7 +23,7 @@ class MemoryManager:
         # define known file names
         self.spl_file = "repositories/u-boot/u-boot-sunxi-with-spl.bin"
 
-        self.logger.info("MemoryManager instantiated.")
+        self.logger.info("BlockDeviceManager instantiated.")
 
     def _destroy_partition_table(self):
         """
@@ -48,7 +48,8 @@ class MemoryManager:
 
         :return: True if write successful, else False
         """
-        command_list = ["sudo", "dd", "if={self.spl_file}", "of={self.block_device}", "bs=1024", "seek=8"]
+        command_list = ["sudo", "dd", f"if={self.spl_file}", f"of={self.block_device}", "bs=1024", "seek=8"]
+        
         try:
             subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info(f".spl successfully written to {self.block_device}.")
@@ -121,8 +122,8 @@ class MemoryManager:
         """
         command_list_1 = ["sudo", "blockdev", "--rereadpt", self.block_device] 
         command_list_2 = ["sudo", "sfdisk", self.block_device]
-        command_list_3 = ["sudo", "mkfs.vfat", self.block_device]
-        command_list_4 = ["sudo", "mkfs.ext4", self.block_device]
+        command_list_3 = ["sudo", "mkfs.vfat", f"{self.block_device}1"]
+        command_list_4 = ["sudo", "mkfs.ext4", f"{self.block_device}2"]
         command_2_input = "1M,64M,c\n,,L"
 
         try:

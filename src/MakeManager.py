@@ -44,11 +44,11 @@ class MakeManager:
         try:
             result = subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info(f"nproc command successful. Setting nproc to {result.stdout.decode()}.")
-            return result.stdout.decode()
+            return int(result.stdout.decode().strip())
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to query system for core/proc amount. Setting nproc to 1 as default.")
             self.logger.error(e.stderr.decode())
-            return "1"
+            return 1 
 
     def _check_for_file(self, file_name, file_directory):
         """

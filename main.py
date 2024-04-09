@@ -128,7 +128,16 @@ def main():
         exit()
 
     logger.info("FSManager has finished configuring the RootFS")
+    
+    # Install Modules
 
+    # Install Header Files
+
+    # Install Firmware
+
+    # Copy Image, .dtb, .dtbo, boot.scr to boot partition
+
+    #
 
 if __name__ == "__main__":
     main()

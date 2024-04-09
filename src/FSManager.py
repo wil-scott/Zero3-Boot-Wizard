@@ -15,16 +15,16 @@ class FSManager:
 
         :param block_device: a String representing the user's Micro-SD Card
         """
-        self.logger = logging.getlogger("config_tool")
+        self.logger = logging.getLogger("config_tool")
         self.block_device = block_device
         self.root_partition = f"{block_device}2"
         self.mount_dir = "/mnt/"
         self.debian_release = "bookworm" 
-        self.chroot_command_list = ["sudo", "chroot", self.mount_dir, "/bin/sh", "-c"]
+        self.chroot_command_list = ["sudo", "chroot", self.mount_dir]
 
         self.logger.info("FSManager instantiated.")
 
-     def mount_device(self):
+    def _mount_device(self):
         """
         Mount the root partition to /mnt.
 
@@ -41,7 +41,7 @@ class FSManager:
 
         return True
 
-    def unmount_device(self):
+    def _unmount_device(self):
         """
         Unmount the root partition from /mnt.
 
@@ -58,7 +58,7 @@ class FSManager:
 
         return True
 
-    def bootstrap_stage_1(self):
+    def _bootstrap_stage_1(self):
         """
         Run stage 1 of debootstrap.
 
@@ -75,7 +75,7 @@ class FSManager:
 
         return True
 
-    def bootstrap_stage_2(self):
+    def _bootstrap_stage_2(self):
         """
         Run second stage of Debootstrap in chrooted /mnt.
 
@@ -87,6 +87,7 @@ class FSManager:
             self.logger.info("Debootstrap Stage 2 complete.")
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to complete Debootstrap Stage 2.")
+            self.logger.info(e.stdout.decode())
             self.logger.error(e.stderr.decode())
             return False
 
@@ -101,7 +102,7 @@ class FSManager:
         command_list = ["passwd"]
         password_input =  f"temp123\ntemp123\n"
         try:
-            subprocess.run(self.chroot_command_list + command_list, input=password_input, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(self.chroot_command_list + command_list, input=password_input, text=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info("Password set to default value.")
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to set Root password in rootfs.")
@@ -116,13 +117,14 @@ class FSManager:
 
         :return: True if successful, else False
         """
-        command_list = [f"echo 'orangepi' > /etc/hostname"]
+        command_list = ["echo", "orangepi", ">", "/etc/hostname"]
+        command = " ".join(self.chroot_command_list + command_list)
         try:
-            subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(command, check=True, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info("Hostname updated to default.")
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to update hostname in rootfs.")
-            self.logger.error(e.stderr.decode())
+            self.logger.error(e.stderr)
             return False
 
         return True
@@ -150,16 +152,20 @@ class FSManager:
 
         :return: True if successful, else False
         """
-        fstab_content = """none  /tmp	tmpfs	defaults,noatime,mode=1777	0	0
-        /dev/mmcblk0p2	/	    ext4	defaults	0	1
-        /dev/mmcblk0p1	/boot	vfat	defaults	0	2"""
-        command_list = [f"echo '{fstab_content}' > /etc/fstab"]
+        fstab_content = (
+            "none  /tmp	tmpfs	defaults,noatime,mode=1777	0	0\n"
+            "/dev/mmcblk0p2	/	    ext4	defaults	0	1\n"
+            "/dev/mmcblk0p1	/boot	vfat	defaults	0	2"
+        )
+        command_list = ["echo", f'"{fstab_content}"', ">", "/etc/fstab"]
+        command = " ".join(self.chroot_command_list + command_list)
+        self.logger.info(command)
         try:
-            subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(command, check=True, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info("Successfully updated fstab in Rootfs.")
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to update /etc/fstab.")
-            self.logger.error(e.stderr.decode())
+            self.logger.error(e.stderr)
             return False
 
         return True
@@ -170,19 +176,22 @@ class FSManager:
 
         :return: True if successful, else False
         """
-        sources_list_content = """deb http://deb.debian.org/debian bookworm main non-free-firmware
-        deb-src http://deb.debian.org/debian bookworm main non-free-firmware
-        deb http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware
-        deb-src http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware
-        deb http://deb.debian.org/debian bookworm-updates main non-free-firmware
-        deb-src http://deb.debian.org/debian bookworm-updates main non-free-firmware"""
-        command_list = [f"echo '{sources_list_content}' > /etc/apt/sources.list"]
+        sources_list_content = (
+            "deb http://deb.debian.org/debian bookworm main non-free-firmware\n"
+            "deb-src http://deb.debian.org/debian bookworm main non-free-firmware\n"
+            "deb http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware\n"
+            "deb-src http://deb.debian.org/debian-security/ bookworm-security main non-free-firmware\n"
+            "deb http://deb.debian.org/debian bookworm-updates main non-free-firmware\n"
+            "deb-src http://deb.debian.org/debian bookworm-updates main non-free-firmware"
+        )
+        command_list = ["echo", f'"{sources_list_content}"', ">", "/etc/apt/sources.list"]
+        command = " ".join(self.chroot_command_list + command_list)
         try:
-            subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(command, check=True, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info("Sources.list updated to standard debian source list.")
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to update sources.list.")
-            self.logger.error(e.stderr.decode())
+            self.logger.error(e.stderr)
             return False
 
         return True
@@ -193,7 +202,7 @@ class FSManager:
 
         :return: True if successful, else False
         """
-        command_list = ["apt-get, install", "-y", "network-manager", "wpasupplicant", "iw", "usbutils"]
+        command_list = ["apt-get", "install", "-y", "network-manager", "wpasupplicant", "iw", "usbutils"]
         try:
             subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info("Installed basic networking and usb packages successfully.")
@@ -230,6 +239,9 @@ class FSManager:
         :return: True if successful, else False
         """
         task_list = [
+            self._mount_device,
+            self._bootstrap_stage_1,
+            self._bootstrap_stage_2,
             self._set_root_password,
             self._update_hostname,
             self._enable_serial_console,
@@ -237,10 +249,13 @@ class FSManager:
             self._update_apt_sources,
             self._install_starter_packages,
             self._cleanup,
+            self._unmount_device,
         ]
 
         for task in task_list:
             if task() is False:
+                self.logger.info("Error encountered. Attempting to unmount /mnt...")
+                self._unmount_device()
                 return False
 
         return True

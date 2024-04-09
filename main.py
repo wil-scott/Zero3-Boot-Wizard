@@ -14,6 +14,7 @@ import shutil
 from src.SetupManager import SetupManager
 from src.MakeManager import MakeManager
 from src.BlockDeviceManager import BlockDeviceManager
+from src.FSManager import FSManager
 
 
 def setup_logging():
@@ -121,7 +122,12 @@ def main():
     logger.info("MakeManager has finishing compiling Image, DTB, and modules.")
 
     # Make and configure RootFS
+    fs_manager = FSManager(args.blockdevice)
+    if fs_manager.configure_rootfs() is False:
+        logger.info("Unable to configure RootFS. Please Review logs for more information.")
+        exit()
 
+    logger.info("FSManager has finished configuring the RootFS")
 
 
 if __name__ == "__main__":

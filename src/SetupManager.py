@@ -39,23 +39,23 @@ class SetupManager:
         # Finished Init
         self.logger.info("SetupManager instantiated.")
         
-    def _create_build_directory(self):
-        """
-        Creates build directory.
-
-        :return: True if creation is successful, else False
-        """
-        try:
-            pathlib.Path.mkdir("build")
-            self.logger.info("Build directory created.")
-            return True
-        except FileExistsError:
-            self.logger.info("Build directory already exists. Please rename or run tool with --clean flag")
-            return False
-        except Exception as e:
-            self.logger.info("Error encountered while making build directory.")
-            self.logger.error(e)
-            return False
+    #def _create_build_directory(self):
+        #"""
+        #Creates build directory.
+#
+        #:return: True if creation is successful, else False
+        #"""
+        #try:
+            #pathlib.Path.mkdir("build")
+            #self.logger.info("Build directory created.")
+            #return True
+        #except FileExistsError:
+            #self.logger.info("Build directory already exists. Please rename or run tool with --clean flag")
+            #return False
+        #except Exception as e:
+            #self.logger.info("Error encountered while making build directory.")
+            #self.logger.error(e)
+            #return False
 
     def _check_internet_connection(self):
         """
@@ -264,7 +264,7 @@ class SetupManager:
             self._check_system_dependencies,
             self._check_repositories_exist,
             self._check_defconfig_in_repo,
-            self._create_build_directory
+            #self._create_build_directory
         ]
 
         for task in task_list:

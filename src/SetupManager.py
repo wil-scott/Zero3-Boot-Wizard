@@ -8,7 +8,10 @@ import pathlib
 import subprocess
 import socket
 
-class SetupManager:
+from src.Task import Task
+
+
+class SetupManager(Task):
 
     def __init__(self, block_device, defconfig=None):
         """
@@ -40,24 +43,6 @@ class SetupManager:
         # Finished Init
         self.logger.info("SetupManager instantiated.")
         
-    #def _create_build_directory(self):
-        #"""
-        #Creates build directory.
-#
-        #:return: True if creation is successful, else False
-        #"""
-        #try:
-            #pathlib.Path.mkdir("build")
-            #self.logger.info("Build directory created.")
-            #return True
-        #except FileExistsError:
-            #self.logger.info("Build directory already exists. Please rename or run tool with --clean flag")
-            #return False
-        #except Exception as e:
-            #self.logger.info("Error encountered while making build directory.")
-            #self.logger.error(e)
-            #return False
-
     def _check_internet_connection(self):
         """
         Connects to remote server (Google) in order to validate internet connection.
@@ -146,11 +131,13 @@ class SetupManager:
 
         :return: True if packages installed or sucessfully installed, False if unable to install missing packages
         """
+        command_list = ["dpkg", "-s"]
+        
         for package in self.packages:
-            try:
-                subprocess.run(["dpkg", "-s", package], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            command_list = ["dpkg", "-s", package]
+            if self.run_task(command_list):
                 self.logger.info(f"Dependency found: {package}. Moving on...")
-            except subprocess.CalledProcessError:
+            else:
                 self.logger.info(f"Unable to detect {package} in system. Attempting installation...")
                 if self._install_system_dependency(package) is False:
                     return False
@@ -163,31 +150,20 @@ class SetupManager:
         :param package: a String representing the missing package/dependency.
         :return: True if installation was sucessful, else False
         """
-        try:
-            subprocess.run(["sudo", "apt-get", "install", "-y", package], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully installed {package}.")
-            return True
-        except subprocess.CalledProcessError as e:
-            self.logger.info(f"Failed to install {package}.")
-            self.logger.error(e.stderr.decode())
-            return False
+        command_list = ["sudo", "apt-get", "install", "-y", package]
+        return self.run_task(command_list)
  
     def _download_build_repositories(self, repository):
         """
         Clone repository into /repositories directory. 
         """
+        command_list_linux = ["git", "clone", self.repositories[repository], "--depth=1", str(destination)]
+        command_list_non_linux = ["git", "clone", self.repositories[repository], str(destination)]
         destination = pathlib.Path(f"repositories/{repository}")
-        try:
-            if repository == "linux":
-                subprocess.run(["git", "clone", self.repositories[repository], "--depth=1", str(destination)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            else:
-                subprocess.run(["git", "clone", self.repositories[repository], str(destination)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully cloned {repository}")
-            return True
-        except subprocess.CalledProcessError as e:
-            self.logger.info(f"Unable to clone {repository}.")
-            self.logger.error(e.stderr.decode())
-            return False
+        if repository == "linux":
+            return self.run_task(command_list_linux)
+        else:
+            return self.run_task(command_list_non_linux)
  
     def _check_repositories_exist(self):
         """
@@ -227,15 +203,7 @@ class SetupManager:
         
         """
         command_list = ["sudo", "cp", self.defconfig_source_path, self.defconfig_destination_path]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully copied {self.defconfig} to linux config directory.")
-        except subprocess.SubprocessError as e:
-            self.logger.info(f"Failed to copy {self.defconfig} to linux config directory.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(command_list)
 
     def _check_defconfig_in_repo(self):
         """
@@ -265,7 +233,6 @@ class SetupManager:
             self._check_system_dependencies,
             self._check_repositories_exist,
             self._check_defconfig_in_repo,
-            #self._create_build_directory
         ]
 
         for task in task_list:

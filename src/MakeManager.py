@@ -43,7 +43,7 @@ class MakeManager:
         command_list = ["nproc"]
         try:
             result = subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"nproc command successful. Setting nproc to {result.stdout.decode()}.")
+            self.logger.info(f"nproc command successful. Setting nproc to {result.stdout.decode().strip()}.")
             return int(result.stdout.decode().strip())
         except subprocess.SubprocessError as e:
             self.logger.info("Unable to query system for core/proc amount. Setting nproc to 1 as default.")
@@ -108,7 +108,7 @@ class MakeManager:
         command_list_2 = ["make", self.cross_comp, "BL31=../arm-trusted-firmware/build/sun50i_h616/debug/bl31.bin"]
         repo_dir = "repositories/u-boot"
         
-        # Check if .spl file already exists
+        # Check if u-boot .bin file already exists
         if pathlib.Path(self.uboot_spl_path).exists():
             self.logger.info("u-boot-sunxi-with-spl.bin found in u-boot repo. Moving on...")
             return True
@@ -117,9 +117,9 @@ class MakeManager:
             subprocess.run(command_list_1, cwd=repo_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.logger.info("Set u-boot recipe to orange pi zero3 defconfig.")
             subprocess.run(command_list_2, cwd=repo_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Made .spl successfully.")
+            self.logger.info("Made u-boot .bin successfully.")
         except subprocess.SubprocessError as e:
-            self.logger.info("Failed to make .spl file.")
+            self.logger.info("Failed to make uboot .bin file.")
             self.logger.error(e.stderr.decode())
             return False
 

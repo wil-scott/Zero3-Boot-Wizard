@@ -6,8 +6,9 @@ InstallManager is responsible for installing modules and copying bootable image 
 import logging
 import pathlib
 import subprocess
+from src.Task import Task
 
-class InstallManager:
+class InstallManager(Task):
 
     def __init__(self, block_device):
         """
@@ -24,42 +25,29 @@ class InstallManager:
 
         self.logger.info("InstallManager Instantiated.")
 
-    def mount_second_partition(self):
-         """
+    def _mount_second_partition(self):
+        """
         Mount the second partition on user's block device to /mnt/.
 
         :return: True if successful, else False
         """
         command_list = ["sudo", "mount", f"{self.block_device}2", "/mnt"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"{self.block_device}2 mounted at /mnt.")
-        except subprocess.SubprocessError as e:
-            self.logger.info(f"Unable to mount {self.block_device}2 at /mnt.")
-            self.logger.error(e.stderr.decode())
-            return False
-        
-        return True
-    
+        return self.run_task(command_list)
+
     def _install_modules(self):
         """
         Mount the second partition on user's block device to /mnt/.
 
         :return: True if successful, else False
         """
+        repo_dir = "repositories/linux"
         command_list = ["sudo", self.arch, self.cross_comp, self.module_path, "make", "modules", "modules_install"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Module installation command successful. Verifying modules present on RootFS...")
-            if pathlib.Path("/mnt/lib/modules").is_dir() is False:
-                self.logger.error("Modules not found at /mnt/lib/modules.")
-                return False
-        except subprocess.SubprocessError as e:
+        result = self.run_task(command_list, cmd_cwd=repo_dir)
+        if result and pathlib.Path("/mnt/lib/modules").is_dir():
+            return True 
+        else:
             self.logger.info("Unable to install modules to RootFS.")
-            self.logger.error(e.stderr.decode())
             return False
-
-        return True
 
     def _install_headers(self):
         """
@@ -67,20 +55,17 @@ class InstallManager:
 
         :return: True if successful, else False
         """
-        command_list_1 = ["sudo", self.arch, self.header_path, "make", "headers_install"]
-        command_list_2 = ["sudo", "cp", "-r", "repositories/linux/usr/", "/mnt/usr/include/"]
-        
-        try:
-            subprocess.run(command_list_1, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Header installation command complete.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to install header files.")
-            self.logger.error(e.stderr.decode())
-            return False
+        repo_dir = "repositories/linux"
+        commands = {
+            1: ["sudo", self.arch, self.header_path, "make", "headers_install"],
+            2: ["sudo", "cp", "-r", "usr/include", "/mnt/usr/include/"]
+        }
 
+        for key in commands.keys():
+            if self.run_task(commands[key], cmd_cwd=repo_dir) is False:
+                return False
         return True
 
-    # Install Linux Firmware for RTL based chipsets
     def _install_firmware(self):
         """
         Copies RTL firmware to RootFS.
@@ -88,18 +73,45 @@ class InstallManager:
         :return: True if successful, else False
         """
         command_list = ["sudo", "cp", "-r", "repositories/linux-firmware/rtlwifi/", "/mnt/lib/firmware/"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Firmware install command successful. Verifying firmware present on RootFS...")
-            if pathlib.Path("/mnt/lib/firmware/rtlwifi").is_dir() is False:
-                self.logger.error("Firmware not ofund at /mnt/lib/firmware.")
-                return False
-        except subprocess.SubprocessError as e:
+        result = self.run_task(command_list)
+        
+        if result and pathlib.Path("/mnt/lib/firmware/rtlwifi").is_dir():
+            return True        
+        else:
             self.logger.info("Unable to install firmware.")
-            self.logger.error(e.stderr.decode())
             return False
 
-        return False
+    def _post_kernel_header_clean(self):
+        """
+        Remove unnecessary byproducts of make deb-pkg recipe.
+
+        :return: True if successful, else False
+        """
+        commands = {
+            1: ["sudo", "rm", "-fr", ""],
+            2: ["sudo", "rm", "-fr", ""],
+            3: ["sudo", "rm", "-fr", ""],
+        }
+    
+    def _create_kernel_headers(self):
+        """
+        Create linux/kernel header files.
+
+        :return: True if successful, else False
+        """
+        command_list = ["sudo", "make", "deb-pkg"]
+        repo_dir = "repositories/linux"
+        return self.run_task(command_list, cmd_cwd=repo_dir)
+
+    def _copy_kernel_headers(self):
+        """
+        Copy linux kernel headers to /mnt/usr/src.
+
+        :return: True if successful, else False
+        """
+        command_list = ["sudo", "cp", "-r", "debian/linux-headers-*/usr/src/", "/mnt/usr/src/"]
+        repo_dir = "repositories/linux"
+        return self.run_task(command_list, cmd_cwd=repo_dir)
 
     def _switch_mounted_partition(self):
         """
@@ -107,13 +119,73 @@ class InstallManager:
 
         :return: True if successful, else False
         """
-        command_list_1 = ["sudo", "umount", "/mnt"]
-        command_list_2 = ["sudo", "mount", f"{self.block_device}1", "/mnt"]
+        commands = {
+            1: ["sudo", "umount", "/mnt"],
+            2: ["sudo", "mount", f"{self.block_device}1", "/mnt"]
+        }
+       
+        for key in commands.keys():
+            if self.run_task(commands[key]) is False:
+                return False
+        return True
 
-    #
+    def _copy_boot_files(self):
+        """
+        Copy Image, dtb, dtbo, and boot script to boot partition.
 
-    # umount and mount first/boot partition
+        :return: True if successful, else False
+        """
+        commands = {
+            1: ["sudo", "cp", "-r", "repositories/linux/arch/arm64/boot/Image", "/mnt"],
+            2: ["sudo", "cp", "-r", "repositories/linux/arch/arm64/boot/dts/allwinner/sun50i-h618-orangepi-zero3.dtb", "/mnt/device_tree.dtb"],
+            3: ["sudo", "cp", "-r", "kernel_config/boot.scr", "/mnt"],
+            4: ["sudo", "cp", "-r", "kernel_config/expansion-board-overlay.dtbo", "/mnt"],
+        }
+        required_boot_files = {"Image", "device_tree.dtb", "boot.scr", "expansion-board-overlay.dtbo"}
 
-    # copy boot files/script
+        for key in commands.keys():
+            if self.run_task(commands[key]) is False:
+                return False
 
-    # umount and eject
+        # Perform final check that boot files are present in boot partition
+        mnt_contents = set(obj.name for obj in pathlib.Path("/mnt").iterdir())
+        if required_boot_files != mnt_contents:
+            self.logger.error("Unable to verify boot partition contents.")
+            return False
+        else:
+            return True
+
+    def _unmount_device(self):
+        """
+        Unmount the boot partition.
+
+        :return: True if successful, else False
+        """
+        command_list = ["sudo", "umount", "/mnt"]
+        return self.run_task(command_list)
+
+    def install_all(self):
+        """
+        Install/Copy necessary files to root and boot partitions.
+
+        :return: True if successful, else False
+        """
+        task_list = [
+            self._mount_second_partition,
+            self._install_modules, 
+            self._install_headers,
+            self._install_firmware,
+            self._create_kernel_headers,
+            self._copy_kernel_headers,
+            self._switch_mounted_partition,
+            self._copy_boot_files,
+            self._unmount_device,
+        ]
+        for task in task_list:
+            if task() is False:
+                self.logger.info("Error encountered. Attempting to unmount /mnt...")
+                self._unmount_device()
+                return False
+
+        return True
+

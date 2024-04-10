@@ -3,7 +3,6 @@ configdriver.py is responsible for running the Orange Pi Zero3 configuration pro
 @author: Wil Scott
 @date: April 2024
 """
-import atexit
 import logging.config 
 import logging.handlers
 import argparse
@@ -15,6 +14,7 @@ from src.SetupManager import SetupManager
 from src.MakeManager import MakeManager
 from src.BlockDeviceManager import BlockDeviceManager
 from src.FSManager import FSManager
+from src.InstallManager import InstallManager
 
 
 def setup_logging():
@@ -128,16 +128,17 @@ def main():
         exit()
 
     logger.info("FSManager has finished configuring the RootFS")
-    
-    # Install Modules
+    install_manager = InstallManager(args.blockdevice)
+    if install_manager.install_all() is False:
+        logger.info("Unable to install bootable image files. Please Review logs for more information.")
+        exit()
 
-    # Install Header Files
+    logger.info("Install Manager has finished intalling boot files.")
+    logger.info("Config Tool Successful! Exiting...")
+    exit()
 
-    # Install Firmware
-
-    # Copy Image, .dtb, .dtbo, boot.scr to boot partition
-
-    #
+    #TODO: finish general functionality for each class, complete successful runthrough of tool and test on OPZ3
+    #TODO: refactor classes to use generic subprocess tool
 
 if __name__ == "__main__":
     main()

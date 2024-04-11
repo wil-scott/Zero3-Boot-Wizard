@@ -87,11 +87,17 @@ class InstallManager(Task):
 
         :return: True if successful, else False
         """
+        working_dir = "repositories"
         commands = {
-            1: ["sudo", "rm", "-fr", ""],
-            2: ["sudo", "rm", "-fr", ""],
-            3: ["sudo", "rm", "-fr", ""],
+            1: ["sudo", "rm", "-fr", "linux-image*"],
+            2: ["sudo", "rm", "-fr", "linux-libc*"],
+            3: ["sudo", "rm", "-fr", "linux-upstream*"],
+            4: ["sudo", "rm", "-fr", "linux-headers*"]
         }
+        for key in commands.keys():
+            if self.run_task(" ".join(commands[key]), cmd_cwd=working_dir, use_shell=True) is False:
+                return False
+        return True
     
     def _create_kernel_headers(self):
         """
@@ -109,9 +115,9 @@ class InstallManager(Task):
 
         :return: True if successful, else False
         """
-        command_list = ["sudo", "cp", "-r", "debian/linux-headers-*/usr/src/", "/mnt/usr/src/"]
+        command_list = ["sudo", "cp", "-r", "debian/linux-headers-*/usr/src/*", "/mnt/usr/src/"]
         repo_dir = "repositories/linux"
-        return self.run_task(command_list, cmd_cwd=repo_dir)
+        return self.run_task(" ".join(command_list), cmd_cwd=repo_dir, use_shell=True)  # Shell required to expand wildcard
 
     def _switch_mounted_partition(self):
         """
@@ -177,6 +183,7 @@ class InstallManager(Task):
             self._install_firmware,
             self._create_kernel_headers,
             self._copy_kernel_headers,
+            self._post_kernel_header_clean,
             self._switch_mounted_partition,
             self._copy_boot_files,
             self._unmount_device,

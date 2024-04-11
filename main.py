@@ -15,6 +15,8 @@ from src.MakeManager import MakeManager
 from src.BlockDeviceManager import BlockDeviceManager
 from src.FSManager import FSManager
 from src.InstallManager import InstallManager
+from src.Task import Task
+
 
 class Driver(Task):
     def __init__(self):
@@ -23,7 +25,7 @@ class Driver(Task):
         """
         self.logger = logging.getLogger("config_tool")
 
-    def setup_logging():
+    def setup_logging(self):
         """
         Configures logger based on config.json file.
         
@@ -42,9 +44,9 @@ class Driver(Task):
             config = json.load(file)
         logging.config.dictConfig(config)
         
-        self.logger("Logger Configured.")
+        self.logger.info("Logger Configured.")
 
-    def validate_args(args, logger):
+    def validate_args(self, args):
         """
         Validates command line arguments to ensure necessary information is present based on user's intent.
 
@@ -54,24 +56,25 @@ class Driver(Task):
         if args.forceclean:
             try:
                 shutil.rmtree(pathlib.Path("repositories"))
-                logger.info("Repositories removed.")
+                self.logger.info("Repositories removed.")
             except Exception as e:
-                logger.info("Error encountered when attempting to clean tool directory.")
-                logger.error(e)
+                self.logger.info("Error encountered when attempting to clean tool directory.")
+                self.logger.error(e)
             exit()
         elif args.clean:
             commands = {
-                1: ["sudo", "rm", "wget*"],
+                1: ["sudo", "find", ".", "-maxdepth", "1", "-name", "wget-log*", "-delete"]
             }
             for key in commands.keys():
                 if self.run_task(commands[key]) is False:
+                    self.logger.debug(pathlib.Path.cwd())
                     self.logger.error("Error encountered while cleaning tool directory. Review log file for details.")
             exit()
         elif args.makeclean:
             # TODO: add subprocess commands for make-clean/make mrproper
             exit()
         elif args.blockdevice is None:
-            logger.info("Missing Block Device argument detected.")
+            self.logger.info("Missing Block Device argument detected.")
             raise argparse.ArgumentTypeError("Block device argument is required")
         else:
             return
@@ -102,7 +105,7 @@ def main():
     parser.add_argument("-c", "--clean", action="store_true", help="Remove the build directory and its contents")
     parser.add_argument("-mc", "--makeclean", action="store_true", help="Run 'make clean' in tf-a and u-boot repo. Run mrproper in 'linux' repo")
     args = parser.parse_args()
-    validate_args(args, logger)
+    driver.validate_args(args)
 
     # Instantiate Setup Helper and run config checking
     setup_helper = SetupManager(args.blockdevice, args.defconfig)

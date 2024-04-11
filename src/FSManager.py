@@ -7,7 +7,9 @@ import logging
 import pathlib
 import subprocess
 
-class FSManager:
+from src.Task import Task
+
+class FSManager(Task):
 
     def __init__(self, block_device):
         """
@@ -31,15 +33,7 @@ class FSManager:
         :return: True if mount command successful, else False
         """
         command_list = ["sudo", "mount", self.root_partition, "/mnt"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully mounted {self.root_partition} to /mnt.")
-        except subproces.SubprocessError as e:
-            self.logger.info("Failed to mount block device to /mnt.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(command_list)
 
     def _unmount_device(self):
         """
@@ -48,15 +42,7 @@ class FSManager:
         :return: True if unmount command successful, else False
         """
         command_list = ["sudo", "umount", "/mnt"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully unmounted {self.root_partition} from /mnt.")
-        except subproces.SubprocessError as e:
-            self.logger.info("Failed to unmount block device from /mnt.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(command_list)
 
     def _bootstrap_stage_1(self):
         """
@@ -65,15 +51,7 @@ class FSManager:
         :return: True if successful, else False
         """
         command_list = ["sudo", "debootstrap", "--arch=arm64", "--foreign", self.debian_release, self.mount_dir]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Debootstrap Stage 1 complete.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to complete Debootstrap Stage 1.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(command_list)
 
     def _bootstrap_stage_2(self):
         """
@@ -82,16 +60,7 @@ class FSManager:
         :return: True if successful, else False
         """
         command_list = ["/debootstrap/debootstrap", "--second-stage"]
-        try:
-            subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Debootstrap Stage 2 complete.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to complete Debootstrap Stage 2.")
-            self.logger.info(e.stdout.decode())
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(self.chroot_command_list + command_list)
 
     def _set_root_password(self):
         """
@@ -99,17 +68,9 @@ class FSManager:
 
         :return: True if successful, else False
         """
-        command_list = ["passwd"]
-        password_input =  f"temp123\ntemp123\n"
-        try:
-            subprocess.run(self.chroot_command_list + command_list, input=password_input, text=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Password set to default value.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to set Root password in rootfs.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        command_string = f'sudo chroot {self.mount_dir} chpasswd'
+        password_input = "root:temp"
+        return self.run_task(command_string, use_shell=True, cmd_text=True, cmd_input=password_input)
 
     def _update_hostname(self):
         """
@@ -119,15 +80,7 @@ class FSManager:
         """
         command_list = ["echo", "orangepi", ">", "/etc/hostname"]
         command = " ".join(self.chroot_command_list + command_list)
-        try:
-            result = subprocess.run(command, check=True, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Hostname updated to default.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to update hostname in rootfs.")
-            self.logger.error(e.stderr)
-            return False
-
-        return True
+        return self.run_task(command, cmd_text=True, use_shell=True)
 
     def _enable_serial_console(self):
         """
@@ -136,15 +89,7 @@ class FSManager:
         :return: True if successful else False
         """
         command_list = ["systemctl", "enable", "serial-getty@ttyS0.service"]
-        try:
-            subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Serial console enabled on rootfs.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to enable serial console on rootfs.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(self.chroot_command_list + command_list)
 
     def _update_fstab(self):
         """
@@ -159,16 +104,7 @@ class FSManager:
         )
         command_list = ["echo", f'"{fstab_content}"', ">", "/etc/fstab"]
         command = " ".join(self.chroot_command_list + command_list)
-        self.logger.info(command)
-        try:
-            subprocess.run(command, check=True, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Successfully updated fstab in Rootfs.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to update /etc/fstab.")
-            self.logger.error(e.stderr)
-            return False
-
-        return True
+        return self.run_task(command, cmd_text=True, use_shell=True)
 
     def _update_apt_sources(self):
         """
@@ -186,15 +122,7 @@ class FSManager:
         )
         command_list = ["echo", f'"{sources_list_content}"', ">", "/etc/apt/sources.list"]
         command = " ".join(self.chroot_command_list + command_list)
-        try:
-            subprocess.run(command, check=True, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Sources.list updated to standard debian source list.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to update sources.list.")
-            self.logger.error(e.stderr)
-            return False
-
-        return True
+        return self.run_task(command, cmd_text=True, use_shell=True)
 
     def _install_starter_packages(self):
         """
@@ -203,15 +131,7 @@ class FSManager:
         :return: True if successful, else False
         """
         command_list = ["apt-get", "install", "-y", "network-manager", "wpasupplicant", "iw", "usbutils"]
-        try:
-            subprocess.run(self.chroot_command_list + command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Installed basic networking and usb packages successfully.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to install basic networking and usb packages.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
+        return self.run_task(self.chroot_command_list + command_list)
 
     def _cleanup(self):
         """
@@ -219,17 +139,14 @@ class FSManager:
 
         :return: True if successful, else False
         """
-        command_list_1 = ["apt-get", "clean"]
-        command_list_2 = ["rm", "/etc/resolv.conf"]
-        try:
-            subprocess.run(self.chroot_command_list + command_list_1, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            subprocess.run(self.chroot_command_list + command_list_2, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info("Clean up tasks complete.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("Unable to complete clean up tasks.")
-            self.logger.error(e.stderr.decode())
-            return False
-
+        commands = {
+            1: ["apt-get", "clean"],
+            2: ["rm", "/etc/resolv.conf"],
+        }
+        
+        for key in commands.keys():
+            if self.run_task(self.chroot_command_list + commands[key]) is False:
+                return False
         return True
 
     def configure_rootfs(self):

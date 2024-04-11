@@ -157,9 +157,9 @@ class SetupManager(Task):
         """
         Clone repository into /repositories directory. 
         """
-        command_list_linux = ["git", "clone", self.repositories[repository], "--depth=1", str(destination)]
-        command_list_non_linux = ["git", "clone", self.repositories[repository], str(destination)]
-        destination = pathlib.Path(f"repositories/{repository}")
+        destination = f"repositories/{repository}"
+        command_list_linux = ["git", "clone", self.repositories[repository], "--depth=1", destination]
+        command_list_non_linux = ["git", "clone", self.repositories[repository], destination]
         if repository == "linux":
             return self.run_task(command_list_linux)
         else:

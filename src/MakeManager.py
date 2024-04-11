@@ -8,7 +8,9 @@ import pathlib
 import subprocess
 import socket
 
-class MakeManager:
+from src.Task import Task
+
+class MakeManager(Task):
 
     def __init__(self, block_device, defconfig=None):
         """

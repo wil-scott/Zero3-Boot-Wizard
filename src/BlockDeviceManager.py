@@ -7,8 +7,9 @@ import logging
 import pathlib
 import subprocess
 
+from src.Task import Task
 
-class BlockDeviceManager:
+class BlockDeviceManager(Task):
 
     def __init__(self, block_device):
         """
@@ -32,16 +33,8 @@ class BlockDeviceManager:
         :return: True if overwrite successful, else False
         """
         command_list = ["sudo", "dd", "if=/dev/zero", f"of={self.block_device}", "bs=1M", "count=1"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"dd command complete - partition wiped from {self.block_device}.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("dd command to wipe partition failed.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
-
+        return self.run_task(command_list)
+        
     def _write_spl_to_device(self):
         """
         Write .spl file created by u-boot + tf-a to block device.
@@ -49,17 +42,8 @@ class BlockDeviceManager:
         :return: True if write successful, else False
         """
         command_list = ["sudo", "dd", f"if={self.spl_file}", f"of={self.block_device}", "bs=1024", "seek=8"]
+        return self.run_task(command_list)
         
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f".spl successfully written to {self.block_device}.")
-        except subprocess.SubprocessError as e:
-            self.logger.info("dd command to write .spl to block device failed.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
-
     def mount_device(self):
         """
         Mount the block device to /mnt.
@@ -67,16 +51,8 @@ class BlockDeviceManager:
         :return: True if mount command successful, else False
         """
         command_list = ["sudo", "mount", self.block_device, "/mnt"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully mounted {self.block_device} to /mnt.")
-        except subproces.SubprocessError as e:
-            self.logger.info("Failed to mount block device to /mnt.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
-
+        return self.run_task(command_list)
+        
     def unmount_device(self):
         """
         Unmount the block device from /mnt.
@@ -84,16 +60,8 @@ class BlockDeviceManager:
         :return: True if unmount command successful, else False
         """
         command_list = ["sudo", "umount", "/mnt"]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully unmounted {self.block_device} from /mnt.")
-        except subproces.SubprocessError as e:
-            self.logger.info("Failed to unmount block device from /mnt.")
-            self.logger.error(e.stderr.decode())
-            return False
-
-        return True
-
+        return self.run_task(command_list)
+        
     def copy_file_to_mnt(self, source_path, destination_path=None):
         """
         Copy a file to the mounted device.
@@ -102,43 +70,33 @@ class BlockDeviceManager:
         :param destination_path: the path of the destination for the file to be copied
         :return: True if copy was succesful, else False
         """
-
         command_list = ["sudo", "cp", "-r", source_path, destination_path]
-        try:
-            subprocess.run(command_list, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully copied {source_path} to {destination_path}")
-        except subprocess.SubprocessError as e:
-            self.logger.info(f"Failed to copy {source_path} to {destination_path}")
-            self.logger.error(e.stderr.decode())
-            return False
+        return self.run_task(command_list)
         
-        return True
-
     def _create_new_partitions(self):
         """
         Create new partitions on block device.
 
         :return: True if block device configured successfully, else False
         """
-        command_list_1 = ["sudo", "blockdev", "--rereadpt", self.block_device] 
-        command_list_2 = ["sudo", "sfdisk", self.block_device]
-        command_list_3 = ["sudo", "mkfs.vfat", f"{self.block_device}1"]
-        command_list_4 = ["sudo", "mkfs.ext4", f"{self.block_device}2"]
-        command_2_input = "1M,64M,c\n,,L"
+        commands = {
+            1: ["sudo", "blockdev", "--rereadpt", self.block_device],
+            2: ["sudo", "sfdisk", self.block_device],
+            3: ["sudo", "mkfs.vfat", f"{self.block_device}1"],
+            4: ["sudo", "mkfs.ext4", f"{self.block_device}2"],
+        }
 
-        try:
-            subprocess.run(command_list_1, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully updated kernel view of partition table.")
-            subprocess.run(command_list_2, input=command_2_input, text=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully partitioned {self.block_device}")
-            subprocess.run(command_list_3, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            subprocess.run(command_list_4, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.logger.info(f"Successfully formatted partitions on {self.block_device}")
-        except subprocess.SubprocessError as e:
-            self.logger.info(f"Error while partitioning {self.block_device}")
-            self.logger.error(e.stderr.decode())
-            return False
-        
+        for key in commands.keys():
+            if key == 2:
+                cmd_input = "1M,64M,c\n,,L"
+                cmd_text = True
+            else:
+                cmd_input = None
+                cmd_text = None
+
+            if self.run_task(commands[key], cmd_input=cmd_input, cmd_text=cmd_text) is False:
+                return False
+
         return True
 
     def configure_block_device_with_bootloader(self):

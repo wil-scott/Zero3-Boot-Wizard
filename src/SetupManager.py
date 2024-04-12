@@ -29,7 +29,7 @@ class SetupManager(Task):
         self.config_files = {self.defconfig, "boot.scr", "expansion-board-overlay.dtbo"}
         self.packages = ["swig", "python3-dev", "build-essential", "device-tree-compiler", "git", "bison", "flex",
                          "python3-setuptools", "libssl-dev", "dosfstools", "libncurses-dev", "bc", "debootstrap",
-                         "debhelper-compat=12", "libelf-dev"]
+                         "debhelper-compat", "libelf-dev"]
         self.repositories = {
             "linux": "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git", 
             "u-boot": "git://git.denx.de/u-boot.git",

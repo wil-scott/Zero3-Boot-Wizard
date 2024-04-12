@@ -45,6 +45,49 @@ class Driver(Task):
         logging.config.dictConfig(config)
         
         self.logger.info("Logger Configured.")
+    
+    def _force_clean(self):
+        """
+        Remove repositories from tool workspace.
+
+        :return: None
+        """
+        try:
+            shutil.rmtree(pathlib.Path("repositories"))
+            self.logger.info("Repositories removed.")
+        except Exception as e:
+            self.logger.info("Error encountered when attempting to clean tool directory.")
+            self.logger.error(e)
+
+    def _clean(self):
+        """
+        Removes log files generated as byproduct of tool's dependencies.
+
+        :return: None
+        """
+        commands = {
+            1: ["sudo", "find", ".", "-maxdepth", "1", "-name", "wget-log*", "-delete"]
+        }
+        for key in commands.keys():
+            if self.run_task(commands[key]) is False:
+                self.logger.debug(pathlib.Path.cwd())
+                self.logger.error("Error encountered while cleaning tool directory. Review log file for details.")
+
+    def _make_clean(self):
+        """
+        Runs each repository's clean recipe.
+
+        :return: None
+        """
+        commands =  {
+            "repositories/u-boot": ["sudo", "make", "clean"],
+            "repositories/arm-trusted-firmware": ["sudo", "make", "clean"],
+            "repositories/linux": ["sudo", "make", "mrproper"]
+        }
+        for key, item in commands.items():
+            self.run_task(item, cmd_cwd=key)
+
+        self.logger.info("Repositories reset to default.")
 
     def validate_args(self, args):
         """
@@ -54,24 +97,13 @@ class Driver(Task):
         :return: True or None/Exit if valid flags present, else argparse.error is raised
         """
         if args.forceclean:
-            try:
-                shutil.rmtree(pathlib.Path("repositories"))
-                self.logger.info("Repositories removed.")
-            except Exception as e:
-                self.logger.info("Error encountered when attempting to clean tool directory.")
-                self.logger.error(e)
+            self._force_clean()
             exit()
         elif args.clean:
-            commands = {
-                1: ["sudo", "find", ".", "-maxdepth", "1", "-name", "wget-log*", "-delete"]
-            }
-            for key in commands.keys():
-                if self.run_task(commands[key]) is False:
-                    self.logger.debug(pathlib.Path.cwd())
-                    self.logger.error("Error encountered while cleaning tool directory. Review log file for details.")
+            self._clean()
             exit()
         elif args.makeclean:
-            # TODO: add subprocess commands for make-clean/make mrproper
+            self._make_clean()
             exit()
         elif args.blockdevice is None:
             self.logger.info("Missing Block Device argument detected.")
@@ -88,6 +120,21 @@ class Driver(Task):
         """
         self.logger.info(message)
 
+    def arg_parser(self):
+        """
+        Configure the arg parser and parse command line arguments.
+        
+        :return: the parsed command line arguments.
+        """
+        parser = argparse.ArgumentParser(description="Configures a micro-SD card to run mainline Linux kernel on Orange Pi Zero3")
+        parser.add_argument("-bd", "--blockdevice", type=str, help="Path to the block device representing the target Micro-SD Card")
+        parser.add_argument("-d","--defconfig", default="opz3_defconfig", type=str, help="Name of defconfig file to be used for kernel configuration" )
+        parser.add_argument("-fc", "--forceclean", action="store_true", help="Remove build and repositories directory")
+        parser.add_argument("-c", "--clean", action="store_true", help="Remove the build directory and its contents")
+        parser.add_argument("-mc", "--makeclean", action="store_true", help="Run 'make clean' in tf-a and u-boot repo. Run mrproper in 'linux' repo")
+        return parser.parse_args()
+
+
 def main():
     """
     main() collects and parses command-line arguments necessary for running the config tool.
@@ -98,13 +145,7 @@ def main():
     
     # Parse commmand line arguments
     driver.log("Parsing command line args")
-    parser = argparse.ArgumentParser(description="Configures a micro-SD card to run mainline Linux kernel on Orange Pi Zero3")
-    parser.add_argument("-bd", "--blockdevice", type=str, help="Path to the block device representing the target Micro-SD Card")
-    parser.add_argument("-d","--defconfig", default="opz3_defconfig", type=str, help="Name of defconfig file to be used for kernel configuration" )
-    parser.add_argument("-fc", "--forceclean", action="store_true", help="Remove build and repositories directory")
-    parser.add_argument("-c", "--clean", action="store_true", help="Remove the build directory and its contents")
-    parser.add_argument("-mc", "--makeclean", action="store_true", help="Run 'make clean' in tf-a and u-boot repo. Run mrproper in 'linux' repo")
-    args = parser.parse_args()
+    args = driver.arg_parser()
     driver.validate_args(args)
 
     # Instantiate Setup Helper and run config checking
@@ -156,7 +197,6 @@ def main():
     driver.log("Config Tool Successful! Exiting...")
     exit()
 
-    #TODO: refactor classes to use generic subprocess class function 
 
 if __name__ == "__main__":
     main()

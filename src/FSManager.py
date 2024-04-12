@@ -102,9 +102,7 @@ class FSManager(Task):
             "/dev/mmcblk0p2	/	    ext4	defaults	0	1\n"
             "/dev/mmcblk0p1	/boot	vfat	defaults	0	2"
         )
-        #command = f"echo '{fstab_content}' > /etc/fstab"
-        #command = " ".join(self.chroot_command_list + command_list)
-        #return self.run_task(command, cmd_text=True, use_shell=True)
+        
         try:
             with subprocess.Popen(self.chroot_command_list + ["tee", "/etc/fstab"], stdin=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
                 proc.communicate(input=fstab_content.encode())
@@ -116,7 +114,6 @@ class FSManager(Task):
             self.logger.info("Failed to update fs table.")
             self.logger.error(e.decode())
             return False
-
 
     def _update_apt_sources(self):
         """
@@ -143,9 +140,6 @@ class FSManager(Task):
             self.logger.info("Failed to update sources.list.")
             self.logger.error(e.decode())
             return False
-        #command = f"echo '{sources_list_content}' > /etc/apt/sources.list"
-        #command = " ".join(self.chroot_command_list + command_list)
-        #return self.run_task(command, cmd_text=True, use_shell=True)
 
     def _install_starter_packages(self):
         """

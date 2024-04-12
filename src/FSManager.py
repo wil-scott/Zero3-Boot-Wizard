@@ -102,9 +102,21 @@ class FSManager(Task):
             "/dev/mmcblk0p2	/	    ext4	defaults	0	1\n"
             "/dev/mmcblk0p1	/boot	vfat	defaults	0	2"
         )
-        command_list = ["echo", f'"{fstab_content}"', ">", "/etc/fstab"]
-        command = " ".join(self.chroot_command_list + command_list)
-        return self.run_task(command, cmd_text=True, use_shell=True)
+        #command = f"echo '{fstab_content}' > /etc/fstab"
+        #command = " ".join(self.chroot_command_list + command_list)
+        #return self.run_task(command, cmd_text=True, use_shell=True)
+        try:
+            with subprocess.Popen(self.chroot_command_list + ["tee", "/etc/fstab"], stdin=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+                proc.communicate(input=fstab_content.encode())
+                if proc.returncode != 0:
+                    raise subprocess.SubprocessError(proc.stderr)
+            self.logger.info("Updated fs table.")
+            return True
+        except subprocess.SubprocessError as e:
+            self.logger.info("Failed to update fs table.")
+            self.logger.error(e.decode())
+            return False
+
 
     def _update_apt_sources(self):
         """
@@ -120,9 +132,20 @@ class FSManager(Task):
             "deb http://deb.debian.org/debian bookworm-updates main non-free-firmware\n"
             "deb-src http://deb.debian.org/debian bookworm-updates main non-free-firmware"
         )
-        command_list = ["echo", f'"{sources_list_content}"', ">", "/etc/apt/sources.list"]
-        command = " ".join(self.chroot_command_list + command_list)
-        return self.run_task(command, cmd_text=True, use_shell=True)
+        try:
+            with subprocess.Popen(self.chroot_command_list + ["tee", "/etc/apt/sources.list"], stdin=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+                proc.communicate(input=sources_list_content.encode())
+                if proc.returncode != 0:
+                    raise subprocess.SubprocessError(proc.stderr)
+            self.logger.info("Updated sources.list.")
+            return True
+        except subprocess.SubprocessError as e:
+            self.logger.info("Failed to update sources.list.")
+            self.logger.error(e.decode())
+            return False
+        #command = f"echo '{sources_list_content}' > /etc/apt/sources.list"
+        #command = " ".join(self.chroot_command_list + command_list)
+        #return self.run_task(command, cmd_text=True, use_shell=True)
 
     def _install_starter_packages(self):
         """
